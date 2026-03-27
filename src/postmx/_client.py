@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any, Literal, overload
 from urllib.parse import quote
+from urllib.parse import urlparse
 
 import httpx
 
@@ -27,6 +28,14 @@ DEFAULT_MAX_RETRIES = 2
 DEFAULT_TIMEOUT = 30.0
 
 
+def _normalize_base_url(base_url: str | None, fallback: str = DEFAULT_BASE_URL) -> str:
+    candidate = (base_url or "").strip() or fallback
+    parsed = urlparse(candidate)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise ValueError(f"PostMX: base_url must be a valid absolute http(s) URL (received: {base_url!r})")
+    return candidate.rstrip("/")
+
+
 class PostMX:
     """Async PostMX API client."""
 
@@ -41,7 +50,7 @@ class PostMX:
         if not api_key:
             raise ValueError("PostMX: api_key is required")
         self._api_key = api_key
-        self._base_url = base_url
+        self._base_url = _normalize_base_url(base_url, DEFAULT_BASE_URL)
         self._max_retries = max_retries
         self._timeout = timeout
         self._client: httpx.AsyncClient | None = None

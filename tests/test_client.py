@@ -12,6 +12,16 @@ def test_raises_on_empty_api_key():
         PostMX("")
 
 
+def test_blank_base_url_uses_default():
+    client = PostMX("pmx_live_test", base_url="   ")
+    assert client._base_url == BASE_URL
+
+
+def test_invalid_base_url_raises_value_error():
+    with pytest.raises(ValueError, match="base_url must be a valid absolute http\\(s\\) URL"):
+        PostMX("pmx_live_test", base_url="not-a-url")
+
+
 @respx.mock
 async def test_list_inboxes():
     inboxes = [

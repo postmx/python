@@ -9,7 +9,7 @@ import httpx
 
 from ._errors import PostMXApiError, PostMXNetworkError
 
-VERSION = "0.1.0"
+VERSION = "0.1.1"
 RETRYABLE_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
 MAX_BACKOFF_S = 30.0
 BASE_DELAY_S = 0.5
