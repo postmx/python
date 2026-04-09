@@ -9,14 +9,28 @@ MessageIntent = Literal["login_code", "verification", "password_reset", "magic_l
 LinkType = Literal["verification", "magic_link", "password_reset", "unsubscribe", "other"]
 ContentMode = Literal["full", "otp", "links", "text_only"]
 DeliveryScope = Literal["account", "inbox"]
+InboxMessageAnalysisMode = Literal["all", "disabled", "allowlist", "blocklist"]
+MessageAnalysisStatus = Literal["none", "queued", "complete", "failed", "skipped_quota"]
 
 # --- Request params ---
+
+
+class InboxMessageAnalysis(TypedDict):
+    mode: InboxMessageAnalysisMode
+    recipients: list[str]
 
 
 class CreateInboxParams(TypedDict, total=False):
     label: str  # required, but total=False for convenience; validated server-side
     lifecycle_mode: LifecycleMode
     ttl_minutes: int
+    message_analysis: InboxMessageAnalysis
+
+
+class CreateTemporaryInboxParams(TypedDict, total=False):
+    label: str  # required, but total=False for convenience; validated server-side
+    ttl_minutes: int
+    message_analysis: InboxMessageAnalysis
 
 
 class CreateWebhookParams(TypedDict, total=False):
@@ -38,6 +52,7 @@ class Inbox(TypedDict):
     status: str
     last_message_received_at: str | None
     created_at: str
+    message_analysis: InboxMessageAnalysis
 
 
 class WildcardAddress(TypedDict):
@@ -70,24 +85,43 @@ class ExtractedLink(TypedDict):
     type: LinkType
 
 
+class MessageAnalysis(TypedDict):
+    eligible: bool
+    status: MessageAnalysisStatus
+    requested_at: str | None
+    completed_at: str | None
+    detected_otp: str | None
+    sender_name: str | None
+    category: str | None
+    extracted_id: str | None
+    amount_mentioned: str | None
+    is_urgent: bool | None
+    action_required: bool | None
+    summary: str | None
+
+
 class MessageDetail(MessageSummary):
     text_body: str | None
     html_body: str | None
     otp: str | None
     links: list[ExtractedLink]
     intent: MessageIntent | None
+    analysis: MessageAnalysis
 
 
 class MessageOtpDetail(MessageSummary):
     otp: str | None
+    analysis: MessageAnalysis
 
 
 class MessageLinksDetail(MessageSummary):
     links: list[ExtractedLink]
+    analysis: MessageAnalysis
 
 
 class MessageTextOnlyDetail(MessageSummary):
     text_body: str | None
+    analysis: MessageAnalysis
 
 
 class PageInfo(TypedDict):
@@ -135,6 +169,6 @@ class WebhookEventData(TypedDict):
 
 class WebhookEvent(TypedDict):
     id: str
-    type: str
+    type: Literal["email.received", "email.enriched"]
     created_at: str
     data: WebhookEventData

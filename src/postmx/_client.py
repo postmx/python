@@ -12,6 +12,7 @@ from ._http import request
 from ._types import (
     ContentMode,
     CreateInboxParams,
+    CreateTemporaryInboxParams,
     CreateWebhookParams,
     CreateWebhookResult,
     Inbox,
@@ -107,6 +108,22 @@ class PostMX:
         )
         return data["inbox"]
 
+    async def create_temporary_inbox(
+        self,
+        params: CreateTemporaryInboxParams,
+        *,
+        idempotency_key: str | None = None,
+    ) -> Inbox:
+        body: CreateInboxParams = {
+            "label": params["label"],
+            "lifecycle_mode": "temporary",
+        }
+        if "ttl_minutes" in params:
+            body["ttl_minutes"] = params["ttl_minutes"]
+        if "message_analysis" in params:
+            body["message_analysis"] = params["message_analysis"]
+        return await self.create_inbox(body, idempotency_key=idempotency_key)
+
     async def list_messages(
         self,
         inbox_id: str,
@@ -175,7 +192,7 @@ class PostMX:
         interval: float = 1.0,
         timeout: float = 60.0,
     ) -> MessageDetail:
-        """Poll an inbox until a message arrives, then return it.
+        """Return the latest existing message immediately, or wait for the next incoming email.
 
         Args:
             inbox_id: The inbox to poll.
@@ -260,6 +277,16 @@ class PostMXSync:
         idempotency_key: str | None = None,
     ) -> Inbox:
         return self._run(self._client.create_inbox(params, idempotency_key=idempotency_key))
+
+    def create_temporary_inbox(
+        self,
+        params: CreateTemporaryInboxParams,
+        *,
+        idempotency_key: str | None = None,
+    ) -> Inbox:
+        return self._run(
+            self._client.create_temporary_inbox(params, idempotency_key=idempotency_key)
+        )
 
     def list_messages(
         self,

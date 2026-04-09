@@ -2,11 +2,7 @@
 
 Official Python SDK for the [PostMX](https://postmx.co) API.
 
-- Async-first with sync wrapper
-- Full type hints (PEP 561)
-- Single dependency (`httpx`)
-- Automatic retries with exponential backoff
-- Webhook signature verification
+Think about PostMX in one simple flow: create a temporary inbox, wait for the next email, then read extracted fields like the OTP or first link.
 
 Requires Python 3.9+.
 
@@ -21,32 +17,21 @@ pip install postmx
 ### Async
 
 ```python
+import asyncio
+
 from postmx import PostMX
 
 async def main():
     async with PostMX("pmx_live_...") as postmx:
-        # Create a temporary inbox
-        inbox = await postmx.create_inbox({
+        inbox = await postmx.create_temporary_inbox({
             "label": "signup-test",
-            "lifecycle_mode": "temporary",
-            "ttl_minutes": 15,
         })
         print(inbox["email_address"])
+        message = await postmx.wait_for_message(inbox["id"], timeout=30.0)
+        print(message["otp"])
+        print(message["links"][0]["url"] if message["links"] else None)
 
-        # List active inboxes
-        result = await postmx.list_inboxes()
-        print(result["inboxes"])
-
-        # List messages
-        result = await postmx.list_messages(inbox["id"])
-
-        # Or list messages by exact recipient email
-        recipient_feed = await postmx.list_messages_by_recipient(inbox["email_address"])
-
-        # Get full message detail with OTP extraction
-        detail = await postmx.get_message(result["messages"][0]["id"])
-        print(detail["otp"])    # "482910"
-        print(detail["intent"]) # "login_code"
+asyncio.run(main())
 ```
 
 ### Sync
@@ -55,8 +40,19 @@ async def main():
 from postmx import PostMXSync
 
 postmx = PostMXSync("pmx_live_...")
-inbox = postmx.create_inbox({"label": "test", "lifecycle_mode": "temporary"})
+inbox = postmx.create_temporary_inbox({"label": "test"})
 print(inbox["email_address"])
+message = postmx.wait_for_message(inbox["id"], timeout=30.0)
+print(message["otp"])
+```
+
+`wait_for_message()` returns the latest existing message immediately if the inbox already has one; otherwise it waits for the next incoming email until the timeout.
+
+If you already have a message ID, `content_mode` is just a "what do you want back?" choice:
+
+```python
+otp_only = await postmx.get_message("msg_123", content_mode="otp")
+print(otp_only["otp"])
 ```
 
 ## API Reference
@@ -74,6 +70,7 @@ print(inbox["email_address"])
 ```python
 await postmx.list_inboxes(*, limit=None, cursor=None)         # → ListInboxesResult
 await postmx.create_inbox(params, *, idempotency_key=None)    # → Inbox
+await postmx.create_temporary_inbox(params, *, idempotency_key=None)  # → Inbox
 await postmx.list_messages(inbox_id, *, limit=None, cursor=None)  # → ListMessagesResult
 await postmx.list_messages_by_recipient(recipient_email, *, limit=None, cursor=None)  # → ListMessagesResult
 await postmx.get_message(message_id)                          # → MessageDetail
@@ -81,7 +78,12 @@ await postmx.create_webhook(params, *, idempotency_key=None)  # → CreateWebhoo
 await postmx.wait_for_message(inbox_id, *, interval=1.0, timeout=60.0)  # → MessageDetail
 ```
 
-POST methods accept an optional `idempotency_key`. If not provided, one is auto-generated to make retries safe.
+## Advanced
+
+- Use `create_inbox()` when you need lifecycle controls like `persistent` inboxes or a custom `ttl_minutes`.
+- Use `list_inboxes()` when you need wildcard address information or pagination.
+- Use `create_webhook()` and `verify_webhook_signature()` when you want push delivery instead of polling.
+- POST methods accept an optional `idempotency_key`. If not provided, one is auto-generated to make retries safe.
 
 ## Error Handling
 

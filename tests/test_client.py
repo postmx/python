@@ -35,6 +35,7 @@ async def test_list_inboxes():
             "status": "active",
             "last_message_received_at": "2026-03-25T18:04:10Z",
             "created_at": "2026-03-25T18:00:00Z",
+            "message_analysis": {"mode": "all", "recipients": []},
         },
         {
             "id": "inb_2",
@@ -46,6 +47,7 @@ async def test_list_inboxes():
             "status": "active",
             "last_message_received_at": None,
             "created_at": "2026-03-25T17:30:00Z",
+            "message_analysis": {"mode": "disabled", "recipients": []},
         },
     ]
     page_info = {"has_more": False, "next_cursor": None}
@@ -65,7 +67,7 @@ async def test_list_inboxes():
 
 @respx.mock
 async def test_list_inboxes_no_params():
-    inboxes = [{"id": "inb_1", "label": "test", "email_address": "a@b.com", "lifecycle_mode": "temporary", "ttl_minutes": None, "expires_at": None, "status": "active", "last_message_received_at": None, "created_at": "2026-01-01T00:00:00Z"}]
+    inboxes = [{"id": "inb_1", "label": "test", "email_address": "a@b.com", "lifecycle_mode": "temporary", "ttl_minutes": None, "expires_at": None, "status": "active", "last_message_received_at": None, "created_at": "2026-01-01T00:00:00Z", "message_analysis": {"mode": "all", "recipients": []}}]
     page_info = {"has_more": False, "next_cursor": None}
     respx.get(url__startswith=f"{BASE_URL}/v1/inboxes").mock(
         return_value=httpx.Response(
@@ -90,6 +92,7 @@ async def test_create_inbox():
         "expires_at": None,
         "status": "active",
         "created_at": "2026-01-01T00:00:00Z",
+        "message_analysis": {"mode": "all", "recipients": []},
     }
     route = respx.post(f"{BASE_URL}/v1/inboxes").mock(
         return_value=httpx.Response(
@@ -99,9 +102,44 @@ async def test_create_inbox():
         )
     )
     async with PostMX("pmx_live_test") as client:
-        result = await client.create_inbox({"label": "test", "lifecycle_mode": "temporary", "ttl_minutes": 15})
+        result = await client.create_inbox({"label": "test", "lifecycle_mode": "temporary", "ttl_minutes": 15, "message_analysis": {"mode": "all", "recipients": []}})
     assert result == inbox
     assert route.calls[0].request.headers["authorization"] == "Bearer pmx_live_test"
+
+
+@respx.mock
+async def test_create_temporary_inbox():
+    inbox = {
+        "id": "inb_1",
+        "label": "signup-test",
+        "email_address": "signup-test@postmx.email",
+        "lifecycle_mode": "temporary",
+        "ttl_minutes": 15,
+        "expires_at": None,
+        "status": "active",
+        "created_at": "2026-01-01T00:00:00Z",
+        "message_analysis": {"mode": "all", "recipients": []},
+    }
+    route = respx.post(f"{BASE_URL}/v1/inboxes").mock(
+        return_value=httpx.Response(
+            201,
+            json={"success": True, "request_id": "req_1", "inbox": inbox},
+            headers={"x-request-id": "req_1"},
+        )
+    )
+    async with PostMX("pmx_live_test") as client:
+        result = await client.create_temporary_inbox(
+            {
+                "label": "signup-test",
+                "ttl_minutes": 15,
+                "message_analysis": {"mode": "all", "recipients": []},
+            }
+        )
+    assert result == inbox
+    assert route.calls[0].request.content == (
+        b'{"label":"signup-test","lifecycle_mode":"temporary","ttl_minutes":15,'
+        b'"message_analysis":{"mode":"all","recipients":[]}}'
+    )
 
 
 @respx.mock
@@ -146,7 +184,7 @@ async def test_list_messages_by_recipient():
 
 @respx.mock
 async def test_get_message():
-    message = {"id": "msg_1", "otp": "123456", "links": [], "intent": "login_code"}
+    message = {"id": "msg_1", "otp": "123456", "links": [], "intent": "login_code", "analysis": {"eligible": True, "status": "queued", "requested_at": None, "completed_at": None, "detected_otp": None, "sender_name": None, "category": None, "extracted_id": None, "amount_mentioned": None, "is_urgent": None, "action_required": None, "summary": None}}
     route = respx.get(f"{BASE_URL}/v1/messages/msg_1").mock(
         return_value=httpx.Response(
             200,
@@ -161,7 +199,7 @@ async def test_get_message():
 
 @respx.mock
 async def test_get_message_content_mode_otp():
-    message = {"id": "msg_1", "otp": "123456"}
+    message = {"id": "msg_1", "otp": "123456", "analysis": {"eligible": True, "status": "queued", "requested_at": None, "completed_at": None, "detected_otp": None, "sender_name": None, "category": None, "extracted_id": None, "amount_mentioned": None, "is_urgent": None, "action_required": None, "summary": None}}
     route = respx.get(url__startswith=f"{BASE_URL}/v1/messages/msg_1").mock(
         return_value=httpx.Response(
             200,
@@ -176,7 +214,7 @@ async def test_get_message_content_mode_otp():
 
 @respx.mock
 async def test_get_message_content_mode_links():
-    message = {"id": "msg_1", "links": [{"url": "https://example.com", "type": "verification"}]}
+    message = {"id": "msg_1", "links": [{"url": "https://example.com", "type": "verification"}], "analysis": {"eligible": True, "status": "queued", "requested_at": None, "completed_at": None, "detected_otp": None, "sender_name": None, "category": None, "extracted_id": None, "amount_mentioned": None, "is_urgent": None, "action_required": None, "summary": None}}
     route = respx.get(url__startswith=f"{BASE_URL}/v1/messages/msg_1").mock(
         return_value=httpx.Response(
             200,
@@ -191,7 +229,7 @@ async def test_get_message_content_mode_links():
 
 @respx.mock
 async def test_get_message_content_mode_text_only():
-    message = {"id": "msg_1", "text_body": "Hello world"}
+    message = {"id": "msg_1", "text_body": "Hello world", "analysis": {"eligible": True, "status": "queued", "requested_at": None, "completed_at": None, "detected_otp": None, "sender_name": None, "category": None, "extracted_id": None, "amount_mentioned": None, "is_urgent": None, "action_required": None, "summary": None}}
     route = respx.get(url__startswith=f"{BASE_URL}/v1/messages/msg_1").mock(
         return_value=httpx.Response(
             200,
@@ -235,7 +273,7 @@ async def test_create_webhook():
 async def test_wait_for_message_polls_until_found():
     empty_response = {"success": True, "request_id": "req_1", "messages": [], "page_info": {"has_more": False, "next_cursor": None}}
     found_response = {"success": True, "request_id": "req_2", "messages": [{"id": "msg_1"}], "page_info": {"has_more": False, "next_cursor": None}}
-    detail = {"id": "msg_1", "otp": "123456", "links": [], "intent": "login_code"}
+    detail = {"id": "msg_1", "otp": "123456", "links": [], "intent": "login_code", "analysis": {"eligible": True, "status": "queued", "requested_at": None, "completed_at": None, "detected_otp": None, "sender_name": None, "category": None, "extracted_id": None, "amount_mentioned": None, "is_urgent": None, "action_required": None, "summary": None}}
     detail_response = {"success": True, "request_id": "req_3", "message": detail}
 
     call_count = 0
